@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { DollarSign, Users, ShoppingCart, BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { DollarSign, Users, ShoppingCart, BarChart3, Sparkles, Send, Paperclip, ChevronDown, Zap, Shield, TrendingUp, Globe } from 'lucide-react';
 import KPICard from './KPICard';
 import ChartCard from './ChartCard';
 import {
@@ -66,51 +66,312 @@ const kpiData = [
   },
 ];
 
-export default function DashboardArea() {
+interface DashboardAreaProps {
+  onUploadClick: () => void;
+}
+
+const samplePrompts = [
+  'Show monthly revenue for Q3 by region',
+  'Compare top 5 products by sales volume',
+  'Display customer acquisition cost trends',
+  'Revenue breakdown by product category',
+];
+
+const benefits = [
+  {
+    icon: <Zap size={28} />,
+    title: 'Instant Answers',
+    desc: 'Get results in seconds, not hours. No waiting for analysts to build reports.',
+    color: 'var(--accent-blue-light)',
+    bg: 'rgba(59, 130, 246, 0.1)',
+  },
+  {
+    icon: <Shield size={28} />,
+    title: 'Secure & Private',
+    desc: 'Your data stays yours. Enterprise-grade security with end-to-end encryption.',
+    color: 'var(--success)',
+    bg: 'rgba(34, 197, 94, 0.1)',
+  },
+  {
+    icon: <TrendingUp size={28} />,
+    title: 'Actionable Insights',
+    desc: 'Go beyond raw numbers. AI highlights trends, anomalies, and opportunities.',
+    color: 'var(--accent-purple)',
+    bg: 'rgba(139, 92, 246, 0.1)',
+  },
+  {
+    icon: <Globe size={28} />,
+    title: 'Any Data Source',
+    desc: 'CSV, Excel, PostgreSQL, MySQL, Snowflake — connect anything in seconds.',
+    color: 'var(--warning)',
+    bg: 'rgba(245, 158, 11, 0.1)',
+  },
+];
+
+export default function DashboardArea({ onUploadClick }: DashboardAreaProps) {
+  const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim() || isLoading) return;
+
+    setIsLoading(true);
+    setAiResponse(null);
+    setAiError(null);
+
+    try {
+      const res = await fetch('http://localhost:8000/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setAiError(data.error);
+      } else if (data.response) {
+        setAiResponse(data.response);
+      } else {
+        setAiError('No response received from AI.');
+      }
+    } catch {
+      setAiError('Cannot connect to backend. Make sure the Python server is running on port 8000.');
+    } finally {
+      setIsLoading(false);
+      setQuery('');
+    }
+  };
+
+  const handleChipClick = (prompt: string) => {
+    setQuery(prompt);
+  };
+
   return (
-    <div className="dashboard-grid">
-      {/* KPI Row */}
-      <div className="kpi-row">
-        {kpiData.map((kpi, i) => (
-          <KPICard key={kpi.title} {...kpi} delay={i * 80} />
-        ))}
-      </div>
+    <div className="dashboard-view-container">
+      {/* ===== SECTION 1: Hero ===== */}
+      <section className="dash-section hero-section text-center">
+        <h1 className="hero-title">Query AI</h1>
+        <p className="hero-subtitle">
+          Your data, answered instantly.
+        </p>
 
-      {/* Revenue + Pie */}
-      <div className="charts-row" style={{ animationDelay: '0.3s' }}>
-        <ChartCard
-          title="Monthly Revenue"
-          subtitle="Revenue vs Target for 2024"
-          chartType="Line"
-        >
-          <RevenueLineChart />
-        </ChartCard>
-        <ChartCard
-          title="Product Categories"
-          subtitle="Distribution by category"
-          chartType="Donut"
-        >
-          <CategoryPieChart />
-        </ChartCard>
-      </div>
+        <div className="chat-container mx-auto" style={{ maxWidth: 800 }}>
+          <form onSubmit={handleSubmit}>
+            <div className="chat-input-wrapper" style={{ padding: '16px 20px', borderRadius: 'var(--radius-full)' }}>
+              <div className="chat-input-icon">
+                <Sparkles size={24} />
+              </div>
+              <input
+                type="text"
+                className="chat-input"
+                style={{ fontSize: '18px', padding: '8px 0' }}
+                placeholder="Ask QueryAI anything about your data..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <button
+                type="button"
+                className="chat-upload-btn"
+                onClick={onUploadClick}
+                title="Upload CSV"
+              >
+                <Paperclip size={20} />
+              </button>
+              <button type="submit" className="chat-send-btn flex-center" title="Send query" style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)' }}>
+                <Send size={22} style={{ marginLeft: 2 }} />
+              </button>
+            </div>
+          </form>
 
-      {/* Sales + User Growth */}
-      <div className="charts-row-equal">
-        <ChartCard
-          title="Sales by Region"
-          subtitle="Regional performance breakdown"
-          chartType="Bar"
-        >
-          <SalesBarChart />
-        </ChartCard>
-        <ChartCard
-          title="User Growth"
-          subtitle="Total vs Active users over time"
-          chartType="Area"
-        >
-          <UserGrowthAreaChart />
-        </ChartCard>
-      </div>
+          <div className="prompt-chips" style={{ marginTop: '1.5rem' }}>
+            {samplePrompts.map((prompt) => (
+              <button
+                key={prompt}
+                className="prompt-chip"
+                onClick={() => handleChipClick(prompt)}
+              >
+                <Sparkles size={12} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          {/* AI Response Area */}
+          {isLoading && (
+            <div className="ai-response-card loading">
+              <div className="ai-response-header">
+                <Sparkles size={18} className="ai-icon spinning" />
+                <span>Analyzing your query...</span>
+              </div>
+              <div className="loading-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          )}
+
+          {aiError && !isLoading && (
+            <div className="ai-response-card error">
+              <div className="ai-response-header">
+                <Sparkles size={18} className="ai-icon" />
+                <span>Error</span>
+              </div>
+              <div className="ai-response-body">{aiError}</div>
+            </div>
+          )}
+
+          {aiResponse && !isLoading && (
+            <div className="ai-response-card success">
+              <div className="ai-response-header">
+                <Sparkles size={18} className="ai-icon" />
+                <span>QueryAI Response</span>
+              </div>
+              <div className="ai-response-body" dangerouslySetInnerHTML={{
+                __html: aiResponse
+                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\n/g, '<br/>')
+                  .replace(/^- /gm, '• ')
+              }} />
+            </div>
+          )}
+        </div>
+
+        {!aiResponse && !aiError && !isLoading && (
+          <div className="scroll-indicator text-center" style={{ marginTop: 60, opacity: 0.5, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <p className="text-sm text-muted" style={{ marginBottom: 8 }}>Discover more below</p>
+            <ChevronDown className="animate-bounce text-muted" />
+          </div>
+        )}
+      </section>
+
+      <div className="section-divider"></div>
+
+      {/* ===== SECTION 2: What is Query AI ===== */}
+      <section className="dash-section what-section">
+        <div className="text-center" style={{ marginBottom: '2.5rem' }}>
+          <h2 className="section-heading">What is Query AI?</h2>
+          <p className="section-desc" style={{ maxWidth: 700, margin: '0 auto' }}>
+            Query AI is a conversational business intelligence platform that transforms the way you interact with data.
+            Instead of writing complex SQL or waiting for reports, simply ask a question in plain English and receive
+            instant, interactive visualizations and insights.
+          </p>
+        </div>
+
+        <div className="what-cards">
+          <div className="card what-card">
+            <div className="what-card-number">01</div>
+            <h3>Natural Language Queries</h3>
+            <p className="text-muted">Type questions like &quot;What were our top-selling products last quarter?&quot; — no coding required.</p>
+          </div>
+          <div className="card what-card">
+            <div className="what-card-number">02</div>
+            <h3>Smart Visualizations</h3>
+            <p className="text-muted">AI automatically picks the best chart type for your data — bar, line, pie, or table.</p>
+          </div>
+          <div className="card what-card">
+            <div className="what-card-number">03</div>
+            <h3>Real-Time Analysis</h3>
+            <p className="text-muted">Connect live databases and get up-to-the-minute insights without manual refresh.</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider"></div>
+
+      {/* ===== SECTION 3: How it Works ===== */}
+      <section className="dash-section how-section">
+        <div className="text-center" style={{ marginBottom: '2.5rem' }}>
+          <h2 className="section-heading">How It Works</h2>
+          <p className="section-desc">Three simple steps to unlock your data&apos;s potential.</p>
+        </div>
+
+        <div className="how-steps">
+          <div className="card how-step-card">
+            <div className="how-step-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue-light)' }}>
+              <Paperclip size={28} />
+            </div>
+            <h3>1. Connect Data</h3>
+            <p className="text-muted">Upload a CSV or connect directly to your database in seconds.</p>
+          </div>
+          <div className="how-step-arrow">→</div>
+          <div className="card how-step-card">
+            <div className="how-step-icon" style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent-purple)' }}>
+              <Sparkles size={28} />
+            </div>
+            <h3>2. Ask Questions</h3>
+            <p className="text-muted">Type your query in plain English. No SQL or coding required.</p>
+          </div>
+          <div className="how-step-arrow">→</div>
+          <div className="card how-step-card">
+            <div className="how-step-icon" style={{ background: 'rgba(34, 197, 94, 0.1)', color: 'var(--success)' }}>
+              <BarChart3 size={28} />
+            </div>
+            <h3>3. Get Insights</h3>
+            <p className="text-muted">Instantly receive accurate answers and interactive visualizations.</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider"></div>
+
+      {/* ===== SECTION 4: How It Helps ===== */}
+      <section className="dash-section benefits-section">
+        <div className="text-center" style={{ marginBottom: '2.5rem' }}>
+          <h2 className="section-heading">How It Helps You</h2>
+          <p className="section-desc">Turn complex data into clear, actionable business decisions.</p>
+        </div>
+
+        <div className="benefits-grid">
+          {benefits.map((b, i) => (
+            <div key={i} className="card benefit-card">
+              <div className="benefit-icon" style={{ background: b.bg, color: b.color }}>
+                {b.icon}
+              </div>
+              <h3>{b.title}</h3>
+              <p className="text-muted">{b.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="section-divider"></div>
+
+      {/* ===== SECTION 5: Example Dashboard Output ===== */}
+      <section className="dash-section examples-section">
+        <div className="text-center" style={{ marginBottom: '2.5rem' }}>
+          <h2 className="section-heading">Example Dashboard Output</h2>
+          <p className="section-desc">Here&apos;s what Query AI can generate for you.</p>
+        </div>
+
+        <div className="dashboard-grid">
+          <div className="kpi-row">
+            {kpiData.map((kpi, i) => (
+              <KPICard key={kpi.title} {...kpi} delay={i * 80} />
+            ))}
+          </div>
+
+          <div className="charts-row" style={{ animationDelay: '0.3s' }}>
+            <ChartCard title="Monthly Revenue" subtitle="Revenue vs Target for 2024" chartType="Line">
+              <RevenueLineChart />
+            </ChartCard>
+            <ChartCard title="Product Categories" subtitle="Distribution by category" chartType="Donut">
+              <CategoryPieChart />
+            </ChartCard>
+          </div>
+
+          <div className="charts-row-equal">
+            <ChartCard title="Sales by Region" subtitle="Regional performance breakdown" chartType="Bar">
+              <SalesBarChart />
+            </ChartCard>
+            <ChartCard title="User Growth" subtitle="Total vs Active users over time" chartType="Area">
+              <UserGrowthAreaChart />
+            </ChartCard>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -16,18 +16,20 @@ import {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
 }
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', active: true },
-  { icon: History, label: 'Query History', active: false },
-  { icon: Database, label: 'Data Sources', active: false },
-  { icon: Upload, label: 'Upload Data', active: false },
-  { icon: BookOpen, label: 'Documentation', active: false },
-  { icon: Settings, label: 'Settings', active: false },
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { id: 'history', icon: History, label: 'Query History' },
+  { id: 'sources', icon: Database, label: 'Data Sources' },
+  { id: 'upload', icon: Upload, label: 'Upload Data' },
+  { id: 'docs', icon: BookOpen, label: 'Documentation' },
+  { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="sidebar-toggle" onClick={onToggle}>
@@ -48,10 +50,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className="sidebar-nav-label">Main Menu</div>
         {navItems.map((item) => (
           <a
-            key={item.label}
-            className={`nav-item ${item.active ? 'active' : ''}`}
+            key={item.id}
+            className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
             href="#"
-            onClick={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.preventDefault();
+              onTabChange(item.id);
+            }}
           >
             <item.icon />
             <span>{item.label}</span>
