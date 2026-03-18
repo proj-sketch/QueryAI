@@ -17,6 +17,11 @@ export interface ChatMessage {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   chartData?: any;
   chartType?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  charts?: { title: string, chart_type: string, chart_data: any[] }[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  kpis?: { title: string, value: string, iconColor?: string }[];
+  suggestedQuestions?: string[];
   sqlQuery?: string;
   isError?: boolean;
 }
@@ -27,11 +32,12 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [uploadedDataset, setUploadedDataset] = useState<string | null>(null);
 
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} />;
+        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} uploadedDataset={uploadedDataset} />;
       case 'history':
         return <QueryHistory messages={messages} />;
       case 'sources':
@@ -39,7 +45,7 @@ export default function Home() {
       case 'docs':
         return <Documentation />;
       default:
-        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} />;
+        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} uploadedDataset={uploadedDataset} />;
     }
   };
 
@@ -70,7 +76,13 @@ export default function Home() {
       </div>
 
       {showUploadModal && (
-        <FileUploadModal onClose={() => setShowUploadModal(false)} />
+        <FileUploadModal 
+          onClose={() => setShowUploadModal(false)} 
+          onUploadSuccess={(filename) => {
+            setUploadedDataset(filename);
+            setShowUploadModal(false);
+          }}
+        />
       )}
 
       <SettingsPanel

@@ -5,9 +5,10 @@ import { Upload, FileSpreadsheet, X, CheckCircle, AlertCircle, Loader2 } from 'l
 
 interface FileUploadModalProps {
   onClose: () => void;
+  onUploadSuccess?: (filename: string) => void;
 }
 
-export default function FileUploadModal({ onClose }: FileUploadModalProps) {
+export default function FileUploadModal({ onClose, onUploadSuccess }: FileUploadModalProps) {
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -65,6 +66,9 @@ export default function FileUploadModal({ onClose }: FileUploadModalProps) {
           row_count: data.row_count,
           column_count: data.column_count,
         });
+        if (onUploadSuccess) {
+          setTimeout(() => onUploadSuccess(file.name), 1500);
+        }
       } else {
         setUploadResult({
           success: false,

@@ -1,7 +1,5 @@
-'use client';
-
 import React, { useState } from 'react';
-import { DollarSign, Users, ShoppingCart, BarChart3, Sparkles, Send, Paperclip, ChevronDown, Zap, Shield, TrendingUp, Globe } from 'lucide-react';
+import { DollarSign, Users, ShoppingCart, BarChart3, Sparkles, Send, Paperclip, ChevronDown, Zap, Shield, TrendingUp, Globe, FileSpreadsheet } from 'lucide-react';
 import KPICard from './KPICard';
 import ChartCard from './ChartCard';
 import {
@@ -72,6 +70,7 @@ interface DashboardAreaProps {
   onUploadClick: () => void;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  uploadedDataset?: string | null;
 }
 
 const samplePrompts = [
@@ -112,7 +111,7 @@ const benefits = [
   },
 ];
 
-export default function DashboardArea({ onUploadClick, messages, setMessages }: DashboardAreaProps) {
+export default function DashboardArea({ onUploadClick, messages, setMessages, uploadedDataset }: DashboardAreaProps) {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -180,6 +179,56 @@ export default function DashboardArea({ onUploadClick, messages, setMessages }: 
     setQuery(prompt);
   };
 
+  const handleAnalyzeDataset = async () => {
+    if (!uploadedDataset || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: `Analyze dataset: ${uploadedDataset}`,
+      timestamp: new Date()
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('http://localhost:8000/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataset: uploadedDataset }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          content: data.error,
+          timestamp: new Date(),
+          isError: true
+        }]);
+      } else {
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          content: data.review || 'Analysis complete.',
+          timestamp: new Date(),
+          kpis: data.kpis,
+          charts: data.charts,
+          suggestedQuestions: data.suggested_questions
+        }]);
+      }
+    } catch {
+      setMessages((prev) => [...prev, {
+        role: 'ai',
+        content: 'Cannot connect to backend for analysis.',
+        timestamp: new Date(),
+        isError: true
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="dashboard-view-container" style={messages.length > 0 ? { height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', position: 'relative' } : {}}>
       {messages.length === 0 ? (
@@ -192,6 +241,22 @@ export default function DashboardArea({ onUploadClick, messages, setMessages }: 
         </p>
 
         <div className="chat-container mx-auto" style={{ maxWidth: 800 }}>
+          {uploadedDataset && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue-light)', padding: '6px 14px', borderRadius: '16px', fontSize: '14px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                <FileSpreadsheet size={16} />
+                <span style={{ fontWeight: 500 }}>{uploadedDataset}</span>
+              </div>
+              <button 
+                onClick={handleAnalyzeDataset}
+                disabled={isLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--accent-purple)', color: '#fff', padding: '6px 14px', borderRadius: '16px', fontSize: '14px', border: 'none', cursor: isLoading ? 'wait' : 'pointer', fontWeight: 500 }}
+              >
+                <Sparkles size={16} />
+                Analyze Dataset
+              </button>
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             <div className="chat-input-wrapper" style={{ padding: '16px 20px', borderRadius: 'var(--radius-full)' }}>
               <div className="chat-input-icon">
@@ -394,9 +459,60 @@ export default function DashboardArea({ onUploadClick, messages, setMessages }: 
                   {msg.role === 'user' ? msg.content : undefined}
                 </div>
                 
+                {msg.role === 'ai' && msg.kpis && msg.kpis.length > 0 && (
+                  <div className="kpi-row" style={{ marginTop: 20 }}>
+                    {msg.kpis.map((kpi, idx) => {
+                      const colors: ('blue' | 'green' | 'purple' | 'orange')[] = ['blue', 'green', 'purple', 'orange'];
+                      const icons = [<Sparkles size={20} />, <BarChart3 size={20} />, <TrendingUp size={20} />, <Users size={20} />];
+                      return (
+                        <KPICard 
+                          key={idx} 
+                          title={kpi.title || "Metric"} 
+                          value={kpi.value || "0"} 
+                          trend={idx % 2 === 0 ? 5.4 : -2.1} 
+                          trendLabel="vs avg" 
+                          icon={icons[idx % icons.length]} 
+                          iconColor={colors[idx % colors.length]} 
+                          sparklineData={[{value: 30}, {value: 45}, {value: 40}, {value: 60}, {value: 50}, {value: 70}]} 
+                          delay={idx * 80} 
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {msg.role === 'ai' && msg.charts && msg.charts.length > 0 && (
+                  <div className="charts-row" style={{ marginTop: 20 }}>
+                    {msg.charts.map((chart, idx) => (
+                      <ChartCard 
+                        key={idx} 
+                        title={chart.title || "Analysis Chart"} 
+                        chartType={chart.chart_type?.toUpperCase() || "CHART"} 
+                      >
+                        <div style={{ height: 300, width: '100%' }}>
+                          <DynamicChart data={chart.chart_data} type={chart.chart_type} />
+                        </div>
+                      </ChartCard>
+                    ))}
+                  </div>
+                )}
+
                 {msg.role === 'ai' && msg.chartData && msg.chartType && msg.chartData.length > 0 && (
                   <div style={{ marginTop: 20 }}>
                     <DynamicChart data={msg.chartData} type={msg.chartType} />
+                  </div>
+                )}
+                
+                {msg.role === 'ai' && msg.suggestedQuestions && msg.suggestedQuestions.length > 0 && (
+                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12, fontWeight: 500 }}>Suggested Follow-up Questions</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {msg.suggestedQuestions.map((q, idx) => (
+                        <button key={idx} onClick={() => setQuery(q)} style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue-light)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '8px 12px', borderRadius: 16, fontSize: 13, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s' }}>
+                          {q}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 
@@ -424,6 +540,22 @@ export default function DashboardArea({ onUploadClick, messages, setMessages }: 
           
           <div className="fixed-bottom-input" style={{ position: 'absolute', bottom: '0', left: '0', width: '100%', padding: '20px', background: 'linear-gradient(transparent, var(--bg-primary) 20%)', display: 'flex', justifyContent: 'center' }}>
             <div className="chat-container" style={{ width: '100%', maxWidth: 800 }}>
+              {uploadedDataset && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue-light)', padding: '6px 14px', borderRadius: '16px', fontSize: '14px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                    <FileSpreadsheet size={16} />
+                    <span style={{ fontWeight: 500 }}>{uploadedDataset}</span>
+                  </div>
+                  <button 
+                    onClick={handleAnalyzeDataset}
+                    disabled={isLoading}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--accent-purple)', color: '#fff', padding: '6px 14px', borderRadius: '16px', fontSize: '14px', border: 'none', cursor: isLoading ? 'wait' : 'pointer', fontWeight: 500 }}
+                  >
+                    <Sparkles size={16} />
+                    Analyze
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSubmit}>
                 <div className="chat-input-wrapper" style={{ padding: '12px 20px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
                   <div className="chat-input-icon">

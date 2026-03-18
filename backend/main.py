@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from config import ALLOWED_ORIGINS
-from gemini_client import generate_response, generate_sql_query
+from gemini_client import generate_response, generate_sql_query, generate_dataset_analysis
 from database import db_manager
 
 app = FastAPI(
@@ -27,6 +27,10 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     query: str
+
+
+class AnalyzeRequest(BaseModel):
+    dataset: str
 
 
 class QueryResponse(BaseModel):
@@ -86,6 +90,79 @@ async def process_query(request: QueryRequest):
         chart_type=chart_type,
         chart_data=chart_data,
     )
+
+
+# ========== Routes ==========
+
+@app.post("/api/analyze")
+async def process_analysis(request: AnalyzeRequest):
+    """Generate a rich analysis for a specific dataset."""
+    dataset_name = request.dataset.strip()
+
+    if not dataset_name:
+        raise HTTPException(status_code=400, detail="Dataset name cannot be empty")
+
+    from database.manager import _sanitize_table_name
+    sanitized_name = _sanitize_table_name(dataset_name)
+
+    datasets = db_manager.list_datasets()
+    target_dataset = next((d for d in datasets if d["table_name"] == sanitized_name), None)
+    
+    if not target_dataset:
+        return {"error": f"Dataset '{dataset_name}' not found."}
+
+    analysis_gen = await generate_dataset_analysis(dataset_name, [target_dataset])
+    
+    if analysis_gen.get("error"):
+        return {"error": analysis_gen["error"]}
+        
+    analysis_data = analysis_gen.get("data", {})
+    
+    # Execute KPI queries
+    kpis = analysis_data.get("kpis", [])
+    processed_kpis = []
+    for kpi in kpis:
+        sql = kpi.get("sql")
+        val = "0"
+        if sql:
+            res = db_manager.execute_query(sql)
+            if res.get("success") and res.get("results"):
+                first_row = res["results"][0]
+                if first_row:
+                    val = str(list(first_row.values())[0])
+                    try:
+                        fval = float(val)
+                        if fval.is_integer():
+                            val = f"{int(fval):,}"
+                        else:
+                            val = f"{fval:,.2f}"
+                    except:
+                        pass
+        processed_kpis.append({
+            "title": kpi.get("title", "KPI"),
+            "value": val
+        })
+        
+    # Execute Chart queries
+    charts = analysis_data.get("charts", [])
+    processed_charts = []
+    for chart in charts:
+        sql = chart.get("sql")
+        if sql:
+            res = db_manager.execute_query(sql)
+            if res.get("success") and res.get("results"):
+                processed_charts.append({
+                    "title": chart.get("title", "Chart"),
+                    "chart_type": chart.get("chart_type", "bar"),
+                    "chart_data": res["results"]
+                })
+            
+    return {
+        "review": analysis_data.get("review", "Analysis complete."),
+        "kpis": processed_kpis,
+        "charts": processed_charts,
+        "suggested_questions": analysis_data.get("suggested_questions", [])
+    }
 
 
 # ========== File Upload ==========

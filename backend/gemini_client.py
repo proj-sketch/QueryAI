@@ -193,3 +193,90 @@ Please try to answer the user's question or explain why it cannot be answered us
         "response": None,
         "error": "Maximum retries exceeded for Gemini API.",
     }
+
+async def generate_dataset_analysis(dataset_name: str, datasets_info: list) -> dict:
+    """
+    Generate a comprehensive analysis of a dataset including review, KPI queries, chart queries, and suggested questions.
+    """
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_key_here":
+        return {"error": "API Key missing."}
+
+    schema_text = "Available tables and their columns:\n"
+    for ds in datasets_info:
+        schema_text += f"- Table: `{ds['table_name']}`\n"
+        for col in ds['columns']:
+            schema_text += f"  - `{col['name']}` ({col['type']})\n"
+            
+        if 'sample_rows' in ds and ds['sample_rows']:
+            schema_text += "    - Sample Data (first few rows):\n"
+            schema_text += f"      {json.dumps(ds['sample_rows'])}\n"
+
+    table_name = datasets_info[0]['table_name'] if datasets_info else 'table'
+    prompt = f"""You are an expert Data Analyst profiling a new dataset.
+{schema_text}
+
+Analyze the provided dataset `{dataset_name}` (table: `{table_name}`) and provide a rich profile.
+You MUST output strictly in the following JSON format. Do not use markdown blocks outside the JSON.
+{{
+  "review": "A detailed 2-3 sentence summary of what this dataset appears to contain and its potential usefulness.",
+  "kpis": [
+    {{
+      "title": "Total Record Count",
+      "sql": "SELECT count(*) FROM `{table_name}`"
+    }},
+    {{
+      "title": "Another Key Metric (e.g. Total Revenue)",
+      "sql": "..."
+    }},
+    {{
+      "title": "A 3rd Important Metric",
+      "sql": "..."
+    }}
+  ],
+  "charts": [
+    {{
+      "title": "Distribution by Category (example)",
+      "chart_type": "pie",
+      "sql": "SELECT category_column, count(*) as count FROM `{table_name}` GROUP BY category_column LIMIT 10"
+    }},
+    {{
+      "title": "Trend over Time (if date exists) or Top 10 Items",
+      "chart_type": "bar",
+      "sql": "..."
+    }}
+  ],
+  "suggested_questions": [
+    "What is the average X?",
+    "Which category has the highest Y?",
+    "How does Z vary over time?"
+  ]
+}}
+
+Keep chart queries grouped and cleanly aliased (e.g. `as value`, `as label`). Ensure the SQL is completely valid SQLite. Chart types must be one of: [bar, line, pie, area].
+Generate 3 KPIs, 2-3 Charts, and 3-4 Suggested questions.
+"""
+    client = get_client()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            result = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            raw_text = result.text.strip()
+            print(f"[DEBUG] Raw Analysis JSON: {raw_text}")
+            if raw_text.startswith("```json"):
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif raw_text.startswith("```"):
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+                
+            parsed = json.loads(raw_text)
+            return {"data": parsed, "error": None}
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[ERROR] Gemini generated invalid analysis JSON: {error_msg}")
+            if ("429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg) and attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            return {"error": f"Failed to generate analysis: {str(e)}"}
+    return {"error": "Maximum retries exceeded."}
