@@ -10,24 +10,36 @@ import QueryHistory from '@/components/views/QueryHistory';
 import DataSources from '@/components/views/DataSources';
 import Documentation from '@/components/views/Documentation';
 
+export interface ChatMessage {
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: Date;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  chartData?: any;
+  chartType?: string;
+  sqlQuery?: string;
+  isError?: boolean;
+}
+
 export default function Home() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} />;
+        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} />;
       case 'history':
-        return <QueryHistory />;
+        return <QueryHistory messages={messages} />;
       case 'sources':
         return <DataSources />;
       case 'docs':
         return <Documentation />;
       default:
-        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} />;
+        return <DashboardArea onUploadClick={() => setShowUploadModal(true)} messages={messages} setMessages={setMessages} />;
     }
   };
 

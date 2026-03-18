@@ -11,6 +11,7 @@ import {
   UserGrowthAreaChart,
 } from './SampleCharts';
 import DynamicChart from './DynamicChart';
+import { ChatMessage } from '@/app/page';
 
 const kpiData = [
   {
@@ -69,6 +70,8 @@ const kpiData = [
 
 interface DashboardAreaProps {
   onUploadClick: () => void;
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
 const samplePrompts = [
@@ -109,51 +112,67 @@ const benefits = [
   },
 ];
 
-export default function DashboardArea({ onUploadClick }: DashboardAreaProps) {
+export default function DashboardArea({ onUploadClick, messages, setMessages }: DashboardAreaProps) {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [chartData, setChartData] = useState<any[] | null>(null);
-  const [chartType, setChartType] = useState<string | null>(null);
-  const [sqlQuery, setSqlQuery] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
 
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: query.trim(),
+      timestamp: new Date()
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
     setIsLoading(true);
-    setAiResponse(null);
-    setAiError(null);
-    setChartData(null);
-    setChartType(null);
-    setSqlQuery(null);
+    const sentQuery = query.trim();
+    setQuery('');
 
     try {
       const res = await fetch('http://localhost:8000/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({ query: sentQuery }),
       });
 
       const data = await res.json();
 
       if (data.error) {
-        setAiError(data.error);
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          content: data.error,
+          timestamp: new Date(),
+          isError: true
+        }]);
       } else if (data.response) {
-        setAiResponse(data.response);
-        setChartData(data.chart_data || null);
-        setChartType(data.chart_type || null);
-        setSqlQuery(data.sql_query || null);
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          content: data.response,
+          timestamp: new Date(),
+          chartData: data.chart_data || null,
+          chartType: data.chart_type || null,
+          sqlQuery: data.sql_query || null
+        }]);
       } else {
-        setAiError('No response received from AI.');
+        setMessages((prev) => [...prev, {
+          role: 'ai',
+          content: 'No response received from AI.',
+          timestamp: new Date(),
+          isError: true
+        }]);
       }
     } catch {
-      setAiError('Cannot connect to backend. Make sure the Python server is running on port 8000.');
+      setMessages((prev) => [...prev, {
+        role: 'ai',
+        content: 'Cannot connect to backend. Make sure the Python server is running on port 8000.',
+        timestamp: new Date(),
+        isError: true
+      }]);
     } finally {
       setIsLoading(false);
-      setQuery('');
     }
   };
 
@@ -162,7 +181,9 @@ export default function DashboardArea({ onUploadClick }: DashboardAreaProps) {
   };
 
   return (
-    <div className="dashboard-view-container">
+    <div className="dashboard-view-container" style={messages.length > 0 ? { height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', position: 'relative' } : {}}>
+      {messages.length === 0 ? (
+        <>
       {/* ===== SECTION 1: Hero ===== */}
       <section className="dash-section hero-section text-center">
         <h1 className="hero-title">Query AI</h1>
@@ -210,63 +231,12 @@ export default function DashboardArea({ onUploadClick }: DashboardAreaProps) {
               </button>
             ))}
           </div>
-
-          {/* AI Response Area */}
-          {isLoading && (
-            <div className="ai-response-card loading">
-              <div className="ai-response-header">
-                <Sparkles size={18} className="ai-icon spinning" />
-                <span>Analyzing your query...</span>
-              </div>
-              <div className="loading-dots">
-                <span></span><span></span><span></span>
-              </div>
-            </div>
-          )}
-
-          {aiError && !isLoading && (
-            <div className="ai-response-card error">
-              <div className="ai-response-header">
-                <Sparkles size={18} className="ai-icon" />
-                <span>Error</span>
-              </div>
-              <div className="ai-response-body">{aiError}</div>
-            </div>
-          )}
-
-          {aiResponse && !isLoading && (
-            <div className="ai-response-card success">
-              <div className="ai-response-header">
-                <Sparkles size={18} className="ai-icon" />
-                <span>QueryAI Response</span>
-              </div>
-              <div className="ai-response-body" dangerouslySetInnerHTML={{
-                __html: aiResponse
-                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/\n/g, '<br/>')
-                  .replace(/^- /gm, '• ')
-              }} />
-
-              {chartData && chartType && chartData.length > 0 && (
-                <DynamicChart data={chartData} type={chartType} />
-              )}
-              
-              {sqlQuery && (
-                <div style={{ marginTop: 16, padding: 12, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: 13, color: '#94a3b8', fontFamily: 'monospace', overflowX: 'auto', textAlign: 'left' }}>
-                  <div style={{ marginBottom: 6, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Generated SQL</div>
-                  {sqlQuery}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-        {!aiResponse && !aiError && !isLoading && (
-          <div className="scroll-indicator text-center" style={{ marginTop: 60, opacity: 0.5, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <p className="text-sm text-muted" style={{ marginBottom: 8 }}>Discover more below</p>
-            <ChevronDown className="animate-bounce text-muted" />
-          </div>
-        )}
+        <div className="scroll-indicator text-center" style={{ marginTop: 60, opacity: 0.5, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <p className="text-sm text-muted" style={{ marginBottom: 8 }}>Discover more below</p>
+          <ChevronDown className="animate-bounce text-muted" />
+        </div>
       </section>
 
       <div className="section-divider"></div>
@@ -394,6 +364,96 @@ export default function DashboardArea({ onUploadClick }: DashboardAreaProps) {
           </div>
         </div>
       </section>
+      </>
+      ) : (
+        <>
+          <div className="chat-thread" style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingBottom: '120px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {messages.map((msg, i) => (
+              <div key={i} className={`chat-message ${msg.role === 'user' ? 'message-user' : 'message-ai'}`} style={{
+                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '85%',
+                backgroundColor: msg.role === 'user' ? 'var(--accent-blue)' : 'var(--bg-secondary)',
+                padding: '20px',
+                borderRadius: '16px',
+                border: msg.role === 'ai' && msg.isError ? '1px solid var(--danger)' : '1px solid var(--border)',
+                color: msg.role === 'user' ? '#fff' : 'inherit',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div className="msg-header" style={{ marginBottom: 12, fontSize: '0.85em', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {msg.role === 'ai' && <Sparkles size={14} />}
+                  <strong>{msg.role === 'user' ? 'You' : 'QueryAI'}</strong>
+                  <span style={{ fontSize: '0.9em', opacity: 0.7 }}>{msg.timestamp.toLocaleTimeString()}</span>
+                </div>
+                
+                <div className="msg-content" style={{ lineHeight: 1.6 }} dangerouslySetInnerHTML={msg.role === 'ai' ? {
+                  __html: msg.content
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br/>')
+                    .replace(/^- /gm, '• ')
+                } : undefined}>
+                  {msg.role === 'user' ? msg.content : undefined}
+                </div>
+                
+                {msg.role === 'ai' && msg.chartData && msg.chartType && msg.chartData.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <DynamicChart data={msg.chartData} type={msg.chartType} />
+                  </div>
+                )}
+                
+                {msg.role === 'ai' && msg.sqlQuery && (
+                  <div style={{ marginTop: 20, padding: 16, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 12, fontSize: 13, color: '#94a3b8', fontFamily: 'monospace', overflowX: 'auto', textAlign: 'left', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ marginBottom: 8, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Generated SQL</div>
+                    {msg.sqlQuery}
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {isLoading && (
+              <div className="chat-message message-ai" style={{ alignSelf: 'flex-start', maxWidth: '80%', backgroundColor: 'var(--bg-secondary)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                <div className="ai-response-header flex-center gap-3">
+                  <Sparkles size={18} className="ai-icon spinning" />
+                  <span style={{ fontWeight: 500 }}>Analyzing your query...</span>
+                </div>
+                <div className="loading-dots" style={{ marginTop: 12 }}>
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="fixed-bottom-input" style={{ position: 'absolute', bottom: '0', left: '0', width: '100%', padding: '20px', background: 'linear-gradient(transparent, var(--bg-primary) 20%)', display: 'flex', justifyContent: 'center' }}>
+            <div className="chat-container" style={{ width: '100%', maxWidth: 800 }}>
+              <form onSubmit={handleSubmit}>
+                <div className="chat-input-wrapper" style={{ padding: '12px 20px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
+                  <div className="chat-input-icon">
+                    <Sparkles size={24} />
+                  </div>
+                  <input
+                    type="text"
+                    className="chat-input"
+                    style={{ fontSize: '18px', padding: '12px 0' }}
+                    placeholder="Ask a follow-up question..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="chat-upload-btn"
+                    onClick={onUploadClick}
+                    title="Upload CSV"
+                  >
+                    <Paperclip size={20} />
+                  </button>
+                  <button type="submit" className="chat-send-btn flex-center" title="Send query" style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)' }}>
+                    <Send size={22} style={{ marginLeft: 2 }} />
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

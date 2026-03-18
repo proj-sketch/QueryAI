@@ -98,11 +98,19 @@ class DatabaseManager:
                     for row in info_cursor.fetchall()
                 ]
 
+                # Sample rows
+                sample_cursor = conn.execute(f"SELECT * FROM '{table}' LIMIT 3")
+                sample_rows = [
+                    dict(zip([col["name"] for col in columns], row))
+                    for row in sample_cursor.fetchall()
+                ]
+
                 datasets.append({
                     "table_name": table,
                     "row_count": row_count,
                     "column_count": len(columns),
                     "columns": columns,
+                    "sample_rows": sample_rows,
                 })
 
             return datasets
